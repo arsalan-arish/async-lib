@@ -18,10 +18,10 @@ __all__ = [
 #* Task_queue used by the event loop
 class Task_Queue:
     def __init__(self):
-        self.queue = []
+        self.queue = list([]) # list() to avoid mutable object sharing 
     def enqueue(self, generator_obj):
         self.queue.append(generator_obj)
-    def dequeue(self, generator_obj=None):
+    def dequeue(self):
         self.queue.pop(0)
     def remove_task(self, generator_obj):
         self.queue.remove(generator_obj)
@@ -31,7 +31,7 @@ class Task_Queue:
 class Handler:
     def __init__(self):
         self.queue = Task_Queue()
-        self.protocol = {
+        self.protocol = dict({ # dict() to avoid mutable object sharing
         "await_time" : self.await_time,
         "await_coroutine": self.await_coroutine,
         "none": self.none,
@@ -39,8 +39,8 @@ class Handler:
         "await_all_tasks": self.await_all_tasks,
         "await_task": self.await_task,
         "remove_task": self.remove_task
-       }
-        self.handling_error_msgs = {
+       })
+        self.handling_error_msgs = dict({ # dict() to avoid mutable object sharing
         "await_time" : "",
         "await_coroutine": f"\nThe awaited coroutine failed to run with the following exception",
         "none": "",
@@ -48,7 +48,7 @@ class Handler:
         "await_all_tasks": "",
         "await_task": "",
         "remove_task": "",
-       }
+       })
     
     def await_coroutine(self, **kwargs):
         #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
@@ -131,4 +131,3 @@ class Event_Loop:
             # Until generator returns
             except StopIteration as e:
                 return e.value
-
