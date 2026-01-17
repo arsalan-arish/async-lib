@@ -19,15 +19,16 @@ __all__ = [
 class Task_Queue:
     def __init__(self):
         self.queue = []
-    def enqueue(self, generator):
-        self.queue.append(generator)
-    def dequeue(self, generator):
+    def enqueue(self, generator_obj):
+        self.queue.append(generator_obj)
+    def dequeue(self, generator_obj=None):
         self.queue.pop(0)
+    def remove_task(self, generator_obj):
+        self.queue.remove(generator_obj)
     
 
 #* Signal Command Handling functions
 class Handler:
-
     def __init__(self):
         self.queue = Task_Queue()
         self.protocol = {
@@ -37,8 +38,47 @@ class Handler:
         "create_task": self.create_task,
         "await_all_tasks": self.await_all_tasks,
         "await_task": self.await_task,
-      }
+        "remove_task": self.remove_task
+       }
+        self.handling_error_msgs = {
+        "await_time" : "",
+        "await_coroutine": f"\nThe awaited coroutine failed to run with the following exception",
+        "none": "",
+        "create_task": "",
+        "await_all_tasks": "",
+        "await_task": "",
+        "remove_task": "",
+       }
     
+    def await_coroutine(self, **kwargs):
+        #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
+        target = kwargs.get("target") # It must be a generator object
+        if not target:
+            raise ValueError("ERROR : No target specified")
+
+        loop = Event_Loop()
+        result = loop.run(target) #! This is a major problem of a separate instance of event_loop. 
+        return result             #! This way tasks will get separated if different coroutines create them
+
+    def create_task(self, **kwargs):
+        #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
+        generator_obj = kwargs["target"]
+        self.queue.enqueue(generator_obj)
+        return None
+
+    def remove_task(self, **kwargs):
+        #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
+        generator_obj = kwargs["target"]
+        self.queue.remove_task(generator_obj)
+        return None
+
+    def await_all_tasks(self, **kwargs):
+        #SPEC SIGNAL SPEC PARAMS -->
+        pass
+
+    def await_task(self, **kwargs):
+        #SPEC SIGNAL SPEC PARAMS --> 
+        pass
 
     def await_time(self, **kwargs):
         #SPEC SIGNAL SPEC PARAMS --> {time: int}
@@ -47,31 +87,8 @@ class Handler:
         t.sleep(time)
         return None
 
-    def await_coroutine(self, **kwargs):
-        #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
-        target = kwargs.get("target") # It must be a generator object
-        if not target:
-            raise ValueError("ERROR : No target specified")
-
-        loop = Event_Loop()
-        result = loop.run(target)
-        return result
-
-    def create_task(self, **kwargs):
-        #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
-
-        return None
-
-    def await_all_tasks(self, **kwargs):
-        #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
-        pass
-
-    def await_task(self, **kwargs):
-        #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
-        pass
-
     def none(self, **kwargs):
-        #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
+        #SPEC SIGNAL SPEC PARAMS --> 
         return None
 
 
@@ -106,11 +123,9 @@ class Event_Loop:
                         returned_value = self.handler.protocol[command](**kwargs) # Calling the handling function
                         generator_sending_value = deepcopy(returned_value) # An arbitrary check just in case any bugs come
                     except Exception as e:
-                        if command == "await_coroutine":
-                            print(f"======= ERROR : {kwargs['target'].__name__}() failed to run with the following exception")
-                            traceback.print_exc()
-                        else:
-                            raise e
+                        error_msg = self.handler.handling_error_msgs.get(command)
+                        print(f"======= ERROR - COMMAND: {command}; ARGS: {kwargs};  {error_msg}")
+                        traceback.print_exc()
                 else:
                     raise Exception(PROTOCOL_ERROR)
             # Until generator returns
