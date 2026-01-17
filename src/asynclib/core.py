@@ -17,6 +17,8 @@ __all__ = [
 
 #* Task_queue used by the event loop
 class Task_Queue:
+    __slots__ = ('queue')
+
     def __init__(self):
         self.queue = list([]) # list() to avoid mutable object sharing 
     def enqueue(self, generator_obj):
@@ -29,8 +31,10 @@ class Task_Queue:
 
 #* Signal Command Handling functions
 class Handler:
+    __slots__ = ('protocol', 'handling_error_msgs')
+    queue = Task_Queue()
+
     def __init__(self):
-        self.queue = Task_Queue()
         self.protocol = dict({ # dict() to avoid mutable object sharing
         "await_time" : self.await_time,
         "await_coroutine": self.await_coroutine,
@@ -55,26 +59,28 @@ class Handler:
         target = kwargs.get("target") # It must be a generator object
         if not target:
             raise ValueError("ERROR : No target specified")
-
         loop = Event_Loop()
-        result = loop.run(target) #! This is a major problem of a separate instance of event_loop. 
-        return result             #! This way tasks will get separated if different coroutines create them
+        result = loop.run(target)
+        return result
 
-    def create_task(self, **kwargs):
+    @classmethod
+    def create_task(cls,**kwargs):
         #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
         generator_obj = kwargs["target"]
-        self.queue.enqueue(generator_obj)
+        cls.queue.enqueue(generator_obj)
         return None
 
-    def remove_task(self, **kwargs):
+    @classmethod
+    def remove_task(cls, **kwargs):
         #SPEC SIGNAL SPEC PARAMS --> {target: generator_object}
         generator_obj = kwargs["target"]
-        self.queue.remove_task(generator_obj)
+        cls.queue.remove_task(generator_obj)
         return None
 
-    def await_all_tasks(self, **kwargs):
+    @classmethod
+    def await_all_tasks(cls, **kwargs):
         #SPEC SIGNAL SPEC PARAMS -->
-        pass
+        cls.
 
     def await_task(self, **kwargs):
         #SPEC SIGNAL SPEC PARAMS --> 
@@ -88,22 +94,30 @@ class Handler:
         return None
 
     def none(self, **kwargs):
-        #SPEC SIGNAL SPEC PARAMS --> 
+        #SPEC SIGNAL SPEC PARAMS --> {}
         return None
 
 
 
 #* Custom event loop
 class Event_Loop:
-    def __init__(self):
-        self.handler = Handler()
-        self.__doc__ = f"""
-        Signal SPEC --> tuple(<command>, dict(param1: arg1, param2, arg2, ...))
+    __slots__ = ()
+
+    """ Signal SPEC --> tuple(<command>, dict(param1: arg1, param2, arg2, ...))
         Protocol SPEC -->
-        {list(self.handler.protocol.keys())}"""
-        
+        Available commands:
+        - await_time: Sleep for specified duration
+        - await_coroutine: Await another coroutine
+        - await_task: Wait for a specific task
+        - await_all_tasks: Wait for all tasks to complete
+        - create_task: Create a new task
+        - remove_task: Remove a task
+        - none: No operation
+    """
+
     SIGNAL_SYNTAX_ERROR = "\nTHE EVENT LOOP CANNOT RECOGNIZE SUCH SYNTAX OF SIGNAL\n PLEASE OBEY THE 'SIGNAL SPEC'!"
     PROTOCOL_ERROR = "\nTHIS COMMAND IS NOT IN THE PROTOCOL\n PLEASE OBEY THE 'PROTOCOL'!"
+    handler = Handler()
 
     def run(self, generator_object):
         generator_sending_value = None # Initializing
@@ -118,12 +132,12 @@ class Event_Loop:
                 except ValueError:
                     raise ValueError(SIGNAL_SYNTAX_ERROR)
             # Handle the signal
-                if command in self.handler.protocol:
+                if command in Event_Loop.handler.protocol:
                     try:
-                        returned_value = self.handler.protocol[command](**kwargs) # Calling the handling function
+                        returned_value = Event_Loop.handler.protocol[command](**kwargs) # Calling the handling function
                         generator_sending_value = deepcopy(returned_value) # An arbitrary check just in case any bugs come
                     except Exception as e:
-                        error_msg = self.handler.handling_error_msgs.get(command)
+                        error_msg = Event_Loop.handler.handling_error_msgs.get(command)
                         print(f"======= ERROR - COMMAND: {command}; ARGS: {kwargs};  {error_msg}")
                         traceback.print_exc()
                 else:
