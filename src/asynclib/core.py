@@ -5,7 +5,6 @@
     inherit the functionality of temporarily returning (pausing) and saving their state crucial for 
     asynchronous operations. The functions can give signals (with 'yield' keyword) with specific commands 
     and arguments so that the event loop can understand what to do and handle accrodingly.
-    
 """
 
 from copy import deepcopy
@@ -26,25 +25,13 @@ def await_time(**kwargs):
 
 def await_coroutine(**kwargs):
     #SPEC SIGNAL SPEC PARAMS --> {target: function_object, args : tuple, kwargs : dict}
-
-    # Data validation
-    target = kwargs.get("target")
+    target = kwargs.get("target") # It must be a generator object
     if not target:
         raise ValueError("ERROR : No target specified")
-    coro_args = kwargs.get("args")
-    if coro_args is None:
-        coro_args = ()
-    elif not isinstance(coro_args, (tuple)):
-        raise TypeError("args must be a tuple")
-    coro_kwargs = kwargs.get("kwargs")
-    if coro_kwargs is None:
-        coro_kwargs = {}
-    elif not isinstance(coro_kwargs, dict):
-        raise TypeError("kwargs must be a dict")
 
     # Actual Action
     loop = Event_Loop()
-    result = loop.run(target(*coro_args, **coro_kwargs)) # This can be seperated into a thread or process
+    result = loop.run(target)
     return result
 
 def create_task(**kwargs):
@@ -73,11 +60,11 @@ protocol = {
 #* Task_queue used by the event loop
 class task_queue:
     def __init__(self):
-        pass
-    def enqueue(self):
-        pass
-    def dequeue(self):
-        pass
+        self.queue = []
+    def enqueue(self, coro):
+        self.queue.append(coro)
+    def dequeue(self, coro):
+        self.queue.pop()
     
 
 #* Custom event loop
@@ -86,23 +73,23 @@ class Event_Loop:
         self.__doc__ = f"""
         Signal SPEC --> tuple(<command>, dict(param1: arg1, param2, arg2, ...))
         Protocol SPEC --> 
-        {[i for i in protocol.keys()]}
+        {list(protocol.keys())}
     """
 
     SIGNAL_SYNTAX_ERROR = "\nTHE EVENT LOOP CANNOT RECOGNIZE SUCH SYNTAX OF SIGNAL\n PLEASE OBEY THE 'SIGNAL SPEC'!"
     PROTOCOL_ERROR = "\nTHIS COMMAND IS NOT IN THE PROTOCOL\n PLEASE OBEY THE 'PROTOCOL'!"
 
-    def run(self, main_generator_object):
+    def run(self, generator_object):
         generator_sending_value = None # Initializing
         while True:
             # Drive the generator
             try:
-                yielded = main_generator_object.send(generator_sending_value)
+                yielded = generator_object.send(generator_sending_value)
                 try:
             # Read the signal
                     command = yielded[0]
                     kwargs = dict(yielded[1])
-                except ValueError as e:
+                except ValueError:
                     raise ValueError(SIGNAL_SYNTAX_ERROR)
             # Handle the signal
                 if command in protocol:

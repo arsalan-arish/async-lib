@@ -7,12 +7,12 @@ def test1():
 
 def test2():
     print("Starting coroutine test2() called by main()")
-    yield ("await_coroutine", {"target": test1})
+    yield ("await_coroutine", {"target": test1()})
     print("Ending coroutine test2() called by main()")
 
 def main():
     print("Starting coroutine main()")
-    yield ("await_coroutine", {"target": test2})
+    yield ("await_coroutine", {"target": test2()})
     print("Ending coroutine main() called by Event loop")
 
 
