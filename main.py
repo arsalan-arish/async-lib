@@ -1,18 +1,21 @@
 from src.asynclib.core import Event_Loop
 
-def test1():
-    print("Starting coroutine test1() called by main()")
-    print("Ending coroutine test1() called by main()")
-    yield ("none", {})
+def task1():
+    print("Starting task1...")
+    yield ("await_time", {"time": 3})
+    print("Ending task1...")
 
-def test2():
-    print("Starting coroutine test2() called by main()")
-    yield ("await_coroutine", {"target": test1()})
-    print("Ending coroutine test2() called by main()")
+def task2():
+    print("Starting task2...")
+    yield ("await_time", {"time": 3})
+    print("Ending task2...")
+
 
 def main():
     print("Starting coroutine main()")
-    yield ("await_coroutine", {"target": test2()})
+    yield ("create_task", {"target": task1()})
+    yield ("create_task", {"target": task2()})
+    yield ("await_all_tasks", {})
     print("Ending coroutine main() called by Event loop")
 
 

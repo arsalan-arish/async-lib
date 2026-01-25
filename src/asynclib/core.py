@@ -7,8 +7,14 @@
     and arguments so that the event loop can understand what to do and handle accrodingly.
 """
 
+# For tasks, add internal memory dict of completed tasks' returned results.
+# Also instead of dequeueing(popping), store completed tasks in another list/dict with their results 
+
 from copy import deepcopy
 import traceback
+from threading import Thread
+from time import sleep
+from func_timeout import func_timeout
 
 __all__ = [
     "event_loop",
@@ -23,8 +29,6 @@ class Task_Queue:
         self.queue = list([]) # list() to avoid mutable object sharing 
     def enqueue(self, generator_obj):
         self.queue.append(generator_obj)
-    def dequeue(self):
-        self.queue.pop(0)
     def remove_task(self, generator_obj):
         self.queue.remove(generator_obj)
     
@@ -33,6 +37,10 @@ class Task_Queue:
 class Handler:
     __slots__ = ('protocol', 'handling_error_msgs')
     queue = Task_Queue()
+
+    @staticmethod
+    def counter(time: int):
+        sleep(time)
 
     def __init__(self):
         self.protocol = dict({ # dict() to avoid mutable object sharing
@@ -78,19 +86,47 @@ class Handler:
         return None
 
     @classmethod
-    def await_all_tasks(cls, **kwargs):
-        #SPEC SIGNAL SPEC PARAMS -->
-        cls.
+    def await_all_tasks(cls, time: int = None, tasks: list = None, **kwargs) -> list:
+        #SPEC SIGNAL SPEC PARAMS --> {}
+        if not time:
+            if not tasks:
+                tasks = cls.queue.queue
+                if not tasks:
+                    return list([])
+            loop = Event_Loop()
+            results: list = loop.run_tasks(tasks)
+            return results
+        elif time:
+            if not tasks:
+                tasks = cls.queue.queue
+                if not tasks:
+                    return list([])
+            loop = Event_Loop()
+            t = Thread(target=Handler.counter, args=(time,))
+            t.start()
+            try:
+                results: list | None = func_timeout(time, loop.run_tasks(tasks))
+            except FunctionTimedOut as e:
+                pass
+            t.join()
+            return results
+
 
     def await_task(self, **kwargs):
         #SPEC SIGNAL SPEC PARAMS --> 
         pass
 
-    def await_time(self, **kwargs):
+    @classmethod
+    def await_time(cls, source: str = "run", **kwargs):
         #SPEC SIGNAL SPEC PARAMS --> {time: int}
-        time = kwargs["time"]
-        import time as t
-        t.sleep(time)
+        time: int = kwargs["time"]
+        match source:
+            case "run":
+                Handler.await_all_tasks(time)
+            case "run_tasks":
+                tasks = list(cls.queue.queue).pop(0)
+                Handler.await_all_tasks(time, tasks)
+
         return None
 
     def none(self, **kwargs):
@@ -145,3 +181,46 @@ class Event_Loop:
             # Until generator returns
             except StopIteration as e:
                 return e.value
+
+    def run_tasks(self, tasks: list) -> list:
+        # tasks is a list of generator objects
+        generator_sending_value = None # Initializing value
+        results: list = list([])
+        for task in tasks:
+            while True:
+                # Drive the generator
+                try:
+                    yielded = task.send(generator_sending_value)
+                    try:
+                # Read the signal
+                        command: str = yielded[0]
+                        kwargs: dict = dict(yielded[1])
+                    except ValueError:
+                        raise ValueError(SIGNAL_SYNTAX_ERROR)
+                # Handle the signal
+                    if command in Event_Loop.handler.protocol:
+                        if command == "await_time":
+                            try:
+                                returned_value = Event_Loop.handler.protocol[command]("run_tasks",**kwargs)
+                                results.append(returned_value)
+                            except Exception as e:
+                                error_msg = Event_Loop.handler.handling_error_msgs.get(command)
+                                print(f"======= ERROR - COMMAND: {command}; ARGS: {kwargs};  {error_msg}")
+                                traceback.print_exc()
+                        else:
+                            try:
+                                returned_value = Event_Loop.handler.protocol[command](**kwargs) # Calling the handling function
+                                generator_sending_value = deepcopy(returned_value) # An arbitrary check just in case any bugs come
+                            except Exception as e:
+                                error_msg = Event_Loop.handler.handling_error_msgs.get(command)
+                                print(f"======= ERROR - COMMAND: {command}; ARGS: {kwargs};  {error_msg}")
+                                traceback.print_exc()
+                    else:
+                        raise Exception(PROTOCOL_ERROR)
+                # Until generator returns
+                # TODO Fix the order problem of results
+                except StopIteration as e:
+                    results.append(e.value)
+                    tasks.pop(0)
+
+        return results
